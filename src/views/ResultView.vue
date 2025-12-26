@@ -46,7 +46,7 @@ onMounted(() => {
         <div class="score-value">{{ result.score }}</div>
         
         <div class="status-badge">
-            {{ result.passed ? 'GRAND PRIX CHAMPION' : 'RETIRED' }}
+            {{ result.passed ? '棒，通過測試!!' : '再接再勵!!' }}
         </div>
         
         <div class="stats">
@@ -55,7 +55,7 @@ onMounted(() => {
         
         <!-- Toggle Review -->
         <button class="pixel-btn secondary small-btn" @click="showReview = !showReview">
-            {{ showReview ? 'HIDE REPLAY' : 'WATCH REPLAY' }}
+            {{ showReview ? '關閉答案' : '檢視答案' }}
         </button>
         
         <!-- AI Expansion -->
@@ -67,7 +67,7 @@ onMounted(() => {
 
     <!-- Review List -->
     <div v-if="showReview" class="review-box pixel-box">
-        <h3>RACE REPLAY</h3>
+        <h3>檢視答案</h3>
         <div v-for="item in result.review" :key="item.id" class="review-item" :class="{ 'correct': item.isCorrect, 'wrong': !item.isCorrect }">
             <div class="q-row">
                 <span class="q-text">
@@ -95,7 +95,7 @@ onMounted(() => {
     </div>
     
     <button class="pixel-btn primary" @click="handleRetry">
-        PLAY AGAIN
+        重新測驗
     </button>
 </div>
 </template>
