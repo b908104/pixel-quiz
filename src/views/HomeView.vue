@@ -70,7 +70,7 @@ const handleStart = async () => {
                 @click="handleStart" 
                 :disabled="store.isLoading"
             >
-                {{ store.isLoading ? 'Starting Engine...' : 'START RACE' }}
+                {{ store.isLoading ? 'Starting Engine...' : '開始作答' }}
             </button>
         </div>
     </div>
