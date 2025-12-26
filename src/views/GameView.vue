@@ -90,7 +90,7 @@ const handleNext = async () => {
             @click="handleNext"
             :disabled="!selectedOption || store.isLoading"
         >
-            {{ store.isLoading ? 'NITRO BOOST...' : (isLast ? 'FINISH LINE!' : 'NEXT LAP >') }}
+            {{ store.isLoading ? '對答中...' : (isLast ? '完成送出!' : '下一頁 >') }}
         </button>
     </div>
 
