@@ -44,7 +44,7 @@ const handleStart = async () => {
         
         <div class="settings-row">
             <div class="setting-group">
-                <p class="label-text">SUBJECT</p>
+                <p class="label-text">科目</p>
                 <select v-model="subject" class="pixel-input">
                     <option value="歷史">歷史</option>
                     <option value="地理">地理</option>
@@ -55,8 +55,9 @@ const handleStart = async () => {
             <div class="setting-group">
                 <p class="label-text">題數</p>
                 <select v-model="questionCount" class="pixel-input">
-                    <option :value="10">10題</option>
-                    <option :value="20">20題</option>
+                    <option :value="10">10</option>
+                    <option :value="20">20</option>
+                    <option :value="20">50</option>
                 </select>
             </div>
         </div>
