@@ -15,6 +15,7 @@ export const useQuizStore = defineStore('quiz', {
         isLoading: false,
         error: null,
         gameResult: null, // { score, pass }
+        hasScratched: false, // Track if reward collected for current game
     }),
 
     getters: {
@@ -35,6 +36,7 @@ export const useQuizStore = defineStore('quiz', {
             this.answers = {};
             this.currentQuestionIndex = 0;
             this.gameResult = null;
+            this.hasScratched = false;
 
             try {
                 const gasUrl = import.meta.env.GOOGLE_APP_SCRIPT_URL;
@@ -72,6 +74,10 @@ export const useQuizStore = defineStore('quiz', {
             if (!this.isLastQuestion) {
                 this.currentQuestionIndex++;
             }
+        },
+
+        markScratched() {
+            this.hasScratched = true;
         },
 
         async submitResults() {

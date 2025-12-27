@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuizStore } from '@/stores/quiz'
 
@@ -8,6 +8,13 @@ const store = useQuizStore()
 
 const showReview = ref(false)
 const aiMsg = ref('')
+
+// Scratch Card State
+const showScratchModal = ref(false)
+const cardCanvas = ref(null)
+const cardImage = ref(null)
+const currentCardUrl = ref('')
+const isRevealed = ref(false)
 
 if (!store.gameResult) {
     router.push('/')
@@ -28,6 +35,109 @@ const handleAiExpand = async () => {
     } else {
         aiMsg.value = `PIT STOP ERROR: ${res.message || 'Unknown'}`
     }
+}
+
+// Scratch Card Logic
+const openScratchCard = async () => {
+    if (store.hasScratched) return;
+    
+    // Pick random card from 10001 to 10149
+    // Update MAX_CARD_ID when you add more cards (e.g. 10150, 10151...)
+    const MIN_CARD_ID = 10001;
+    const MAX_CARD_ID = 10149;
+    
+    const randomNum = Math.floor(Math.random() * (MAX_CARD_ID - MIN_CARD_ID + 1)) + MIN_CARD_ID;
+    currentCardUrl.value = `/pixel-quiz/BTS-Cards/${randomNum}.jpg`;
+    
+    showScratchModal.value = true;
+    store.markScratched();
+    
+    await nextTick();
+    initCanvas();
+}
+
+const initCanvas = () => {
+    const canvas = cardCanvas.value;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width = 300;
+    const height = canvas.height = 300;
+    
+    // Fill with silver scratch layer
+    ctx.fillStyle = '#C0C0C0';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Add text "SCRATCH ME!"
+    ctx.fillStyle = '#000';
+    ctx.font = '24px "Press Start 2P", cursive';
+    
+    let isDrawing = false;
+    
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+        return { x, y };
+    }
+    
+    const scratch = (x, y) => {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.arc(x, y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        checkReveal(ctx, width, height);
+    }
+    
+    const startDraw = (e) => {
+        isDrawing = true;
+        const { x, y } = getPos(e);
+        scratch(x, y);
+    }
+    
+    const stopDraw = () => isDrawing = false;
+    
+    const moveDraw = (e) => {
+        if (!isDrawing) return;
+        e.preventDefault(); // Prevent scroll on touch
+        const { x, y } = getPos(e);
+        scratch(x, y);
+    }
+    
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mousemove', moveDraw);
+    canvas.addEventListener('mouseup', stopDraw);
+    canvas.addEventListener('mouseleave', stopDraw);
+    
+    canvas.addEventListener('touchstart', startDraw);
+    canvas.addEventListener('touchmove', moveDraw);
+    canvas.addEventListener('touchend', stopDraw);
+}
+
+const checkReveal = (ctx, width, height) => {
+    if (isRevealed.value) return;
+    
+    // Check pixel data
+    // Sample every 10th pixel for performance
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const pixels = imageData.data;
+    let transparent = 0;
+    const total = pixels.length / 4;
+    
+    for (let i = 0; i < total; i += 10) {
+        if (pixels[i * 4 + 3] === 0) {
+            transparent++;
+        }
+    }
+    
+    if (transparent > (total / 10) * 0.5) { // 50% scratched
+        isRevealed.value = true;
+        
+        // Clear entire canvas
+        ctx.clearRect(0, 0, width, height);
+    }
+}
+
+const closeScratch = () => {
+    showScratchModal.value = false;
 }
 
 onMounted(() => {
@@ -57,6 +167,19 @@ onMounted(() => {
         <button class="pixel-btn secondary small-btn" @click="showReview = !showReview">
             {{ showReview ? '關閉答案' : '檢視答案' }}
         </button>
+        
+        <!-- Lucky Draw Button (Only if passed and not scratched yet) -->
+        <button 
+            v-if="result.passed && !store.hasScratched" 
+            class="pixel-btn primary small-btn bounce" 
+            style="background: #FFD700; color: #000; margin-top: 10px;"
+            @click="openScratchCard"
+        >
+            🎁 領取通關獎勵 (抽小卡)
+        </button>
+        <div v-if="store.hasScratched && !showScratchModal" style="margin-top: 10px; font-size: 0.8rem; color: var(--mk-green);">
+           ✨ 獎勵已領取 ✨
+        </div>
         
         <!-- AI Expansion -->
         <div v-if="canExpand" class="ai-section">
@@ -97,6 +220,22 @@ onMounted(() => {
     <button class="pixel-btn primary" @click="handleRetry">
         重新測驗
     </button>
+    
+    <!-- Scratch Card Modal -->
+    <div v-if="showScratchModal" class="modal-overlay">
+        <div class="modal-content pixel-box">
+            <h3>🎊 恭禧!!刮開小卡領取獎勵 🎊</h3>
+            
+            <div class="scratch-container">
+                <img :src="currentCardUrl" class="card-img" />
+                <canvas ref="cardCanvas" class="scratch-canvas"></canvas>
+            </div>
+            
+            <button class="pixel-btn secondary small-btn" @click="closeScratch" style="margin-top: 15px;">
+                關閉
+            </button>
+        </div>
+    </div>
 </div>
 </template>
 
@@ -303,4 +442,51 @@ onMounted(() => {
 .c-ans { color: var(--mk-green); font-weight: bold; }
 .review-item.wrong .u-ans { color: var(--mk-red); text-decoration: line-through; }
 
+/* Scratch Card Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.modal-content {
+    background: #fff;
+    padding: 20px;
+    text-align: center;
+    border: 4px solid var(--mk-black);
+    max-width: 90%;
+}
+
+.scratch-container {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    margin: 0 auto;
+    border: 4px solid #000;
+}
+
+.card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.scratch-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="gray" stroke="black"/></svg>') 12 12, auto;
+}
 </style>
