@@ -18,10 +18,11 @@ const MAX_CARD_ID = 10156;
 const allCards = computed(() => {
     const cards = [];
     for (let i = MIN_CARD_ID; i <= MAX_CARD_ID; i++) {
+        const isOwned = store.collectedCards.includes(i);
         cards.push({
             id: i,
-            url: `/pixel-quiz/BTS-Cards/${i}.jpg`,
-            owned: store.collectedCards.includes(i)
+            url: isOwned ? `/pixel-quiz/BTS-Cards/${i}.jpg` : '/pixel-quiz/BTS-Cards/BTS_Back.jpg',
+            owned: isOwned
         });
     }
     return cards;
@@ -29,7 +30,8 @@ const allCards = computed(() => {
 
 const toggleGallery = async () => {
     if (!showGallery.value && userId.value) {
-        // Opening gallery: fetch latest cards
+        // Opening: Fetch User's Collection FIRST
+        // Add loading state if you want, but await is simple for now
         await store.fetchUserCards(userId.value);
     }
     showGallery.value = !showGallery.value;
@@ -323,9 +325,10 @@ const handleStart = async () => {
     transition: transform 0.2s;
 }
 
+/* Unowned cards show back, no need for grayscale */
 .card-item.unowned img {
-    filter: grayscale(100%);
-    opacity: 0.3;
+    /* Optional: maybe slightly dim to show it's locked? */
+    /* opacity: 0.8; */
 }
 
 .card-item:hover img {
