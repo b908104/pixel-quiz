@@ -16,6 +16,7 @@ export const useQuizStore = defineStore('quiz', {
         error: null,
         gameResult: null, // { score, pass }
         hasScratched: false, // Track if reward collected for current game
+        collectedCards: [], // List of card IDs
     }),
 
     getters: {
@@ -28,6 +29,39 @@ export const useQuizStore = defineStore('quiz', {
     },
 
     actions: {
+        async fetchUserCards(id) {
+            try {
+                const gasUrl = import.meta.env.GOOGLE_APP_SCRIPT_URL;
+                const response = await axios.post(gasUrl, JSON.stringify({
+                    action: 'getCollection',
+                    id: id
+                }));
+                if (response.data.status === 'success') {
+                    this.collectedCards = response.data.cards || [];
+                }
+            } catch (err) {
+                console.error('Failed to fetch cards', err);
+            }
+        },
+
+        async saveCard(id, cardId) {
+            try {
+                // Optimistic update
+                if (!this.collectedCards.includes(cardId)) {
+                    this.collectedCards.push(cardId);
+                }
+
+                const gasUrl = import.meta.env.GOOGLE_APP_SCRIPT_URL;
+                await axios.post(gasUrl, JSON.stringify({
+                    action: 'updateCollection',
+                    id: id,
+                    cardId: cardId
+                }));
+            } catch (err) {
+                console.error('Failed to save card', err);
+            }
+        },
+
         async startGame(id, subject = '歷史', count = 10) {
             this.userId = id;
             this.subject = subject;

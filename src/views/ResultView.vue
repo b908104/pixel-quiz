@@ -14,6 +14,7 @@ const showScratchModal = ref(false)
 const cardCanvas = ref(null)
 const cardImage = ref(null)
 const currentCardUrl = ref('')
+const currentCardId = ref(0) // New Ref
 const isRevealed = ref(false)
 
 if (!store.gameResult) {
@@ -44,9 +45,10 @@ const openScratchCard = async () => {
     // Pick random card from 10001 to 10149
     // Update MAX_CARD_ID when you add more cards (e.g. 10150, 10151...)
     const MIN_CARD_ID = 10001;
-    const MAX_CARD_ID = 10149;
+    const MAX_CARD_ID = 10156;
     
     const randomNum = Math.floor(Math.random() * (MAX_CARD_ID - MIN_CARD_ID + 1)) + MIN_CARD_ID;
+    currentCardId.value = randomNum;
     currentCardUrl.value = `/pixel-quiz/BTS-Cards/${randomNum}.jpg`;
     
     showScratchModal.value = true;
@@ -133,6 +135,9 @@ const checkReveal = (ctx, width, height) => {
         
         // Clear entire canvas
         ctx.clearRect(0, 0, width, height);
+        
+        // Save Card to Collection
+        store.saveCard(store.userId, currentCardId.value);
     }
 }
 

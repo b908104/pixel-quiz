@@ -26,6 +26,8 @@ function handlePost(e) {
   
   if (action === 'submitResult') return submitResult(data);
   if (action === 'generateQuestions') return generateQuestionsAI(data);
+  if (action === 'getCollection') return getUserCollection(data);
+  if (action === 'updateCollection') return saveUserCard(data);
   
   return outputJSON({status: 'error', message: 'Invalid action'});
 }
@@ -33,6 +35,89 @@ function handlePost(e) {
 function outputJSON(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Helper: Get or Create Player Data Sheet
+function getPlayerSheet(ss) {
+  let sheet = ss.getSheetByName('玩家資料');
+  if (!sheet) {
+    sheet = ss.insertSheet('玩家資料');
+    sheet.appendRow(['PlayerID', 'CollectedCards_JSON', 'LastUpdated']);
+  }
+  return sheet;
+}
+
+function getUserCollection(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getPlayerSheet(ss);
+  const userId = String(data.id).trim();
+  
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+  
+  let cards = [];
+  
+  // Find user (Skip header)
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === userId) {
+      const jsonStr = values[i][1];
+      try {
+        cards = JSON.parse(jsonStr);
+      } catch (e) {
+        cards = [];
+      }
+      break;
+    }
+  }
+  
+  return outputJSON({ status: 'success', cards: cards });
+}
+
+function saveUserCard(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getPlayerSheet(ss);
+  const userId = String(data.id).trim();
+  const cardId = parseInt(data.cardId);
+  
+  if (!cardId) return outputJSON({ status: 'error', message: 'Invalid Card ID' });
+
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+  
+  let rowIndex = -1;
+  let cards = [];
+  
+  // Find user
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === userId) {
+      rowIndex = i + 1; // 1-based index
+      try {
+        cards = JSON.parse(values[i][1]);
+      } catch (e) {
+        cards = [];
+      }
+      break;
+    }
+  }
+  
+  if (!cards.includes(cardId)) {
+    cards.push(cardId);
+    cards.sort((a,b) => a - b);
+    
+    const now = new Date();
+    const jsonStr = JSON.stringify(cards);
+    
+    if (rowIndex !== -1) {
+      // Update existing
+      sheet.getRange(rowIndex, 2).setValue(jsonStr);
+      sheet.getRange(rowIndex, 3).setValue(now);
+    } else {
+      // Create new
+      sheet.appendRow([userId, jsonStr, now]);
+    }
+  }
+  
+  return outputJSON({ status: 'success', cards: cards });
 }
 
 // Helper to get sheets based on subject
@@ -299,9 +384,39 @@ function handleGroqResponse(response, subject) {
     // Clean up any potential markdown
     aiContent = aiContent.replace(/```json/g, '').replace(/```/g, '').trim();
     
+    let newRows;
     try {
-      const newRows = JSON.parse(aiContent);
+      newRows = JSON.parse(aiContent);
+    } catch (e) {
+      // Fallback: If AI returned multiple arrays separated by comma (e.g. [[...]], [[...]]), wrap them
+      try {
+        newRows = JSON.parse(`[${aiContent}]`);
+        // If this works, we likely have a 3D array: [ [[...],[...]], [[...],[...]] ]
+        // We need to flatten it once to get back to [ [...], [...], [...], [...] ]
+        if (Array.isArray(newRows)) {
+          newRows = newRows.flat();
+        }
+      } catch (e2) {
+        return outputJSON({ status: 'error', message: 'Failed to parse JSON: ' + aiContent });
+      }
+    }
+
+    try {
       if (Array.isArray(newRows) && newRows.length > 0) {
+         // Flatten again just in case AI returned a list of lists of questions
+         // We expect a list of Questions, where each Question is an array. 
+         // Expected: [ ["AUTO",...], ["AUTO",...] ]
+         // If we have [ [ ["AUTO",...], ["AUTO",...] ], [ ["AUTO",...] ] ], flatten it.
+         
+         // simple check: if the first element is an array, and the first element of THAT array is also an array...
+         // Actually, safer to just ensure we are iterating over rows.
+         // If newRows[0][0] is "AUTO" (string), it's good.
+         // If newRows[0][0] is Array, it needs flattening.
+         
+         if (Array.isArray(newRows[0]) && Array.isArray(newRows[0][0])) {
+           newRows = newRows.flat();
+         }
+
          const ss = SpreadsheetApp.getActiveSpreadsheet();
          // Pass subject to getSheets to get the correct Question Sheet
          const { qSheet, qSheetName } = getSheets(ss, subject);
@@ -333,7 +448,10 @@ function handleGroqResponse(response, subject) {
          
          let addedCount = 0;
          newRows.forEach(row => {
-           // Check duplicate
+           // Basic validation: row should be array
+           if (!Array.isArray(row)) return;
+           
+           // Check duplicate (Question text is at index 1)
            const qText = String(row[1]).trim().toLowerCase();
            if (!existingQuestions.has(qText)) {
              row[0] = nextId; // Overwrite ID
@@ -349,7 +467,7 @@ function handleGroqResponse(response, subject) {
          return outputJSON({ status: 'error', message: 'Parsed data is not an array' });
       }
     } catch (e) {
-      return outputJSON({ status: 'error', message: 'Failed to parse JSON: ' + aiContent });
+      return outputJSON({ status: 'error', message: 'Error processing AI rows: ' + e.toString() });
     }
 }
 

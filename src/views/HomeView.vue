@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuizStore } from '@/stores/quiz'
 
@@ -10,11 +10,47 @@ const subject = ref('歷史')
 const questionCount = ref(10)
 const error = ref('')
 
+// Card Gallery State
+const showGallery = ref(false)
+const MIN_CARD_ID = 10001;
+const MAX_CARD_ID = 10156;
+
+const allCards = computed(() => {
+    const cards = [];
+    for (let i = MIN_CARD_ID; i <= MAX_CARD_ID; i++) {
+        cards.push({
+            id: i,
+            url: `/pixel-quiz/BTS-Cards/${i}.jpg`,
+            owned: store.collectedCards.includes(i)
+        });
+    }
+    return cards;
+})
+
+const toggleGallery = async () => {
+    if (!showGallery.value && userId.value) {
+        // Opening gallery: fetch latest cards
+        await store.fetchUserCards(userId.value);
+    }
+    showGallery.value = !showGallery.value;
+}
+
+onMounted(() => {
+    // Load last player ID
+    const savedId = localStorage.getItem('pixel_quiz_player_id');
+    if (savedId) {
+        userId.value = savedId;
+    }
+})
+
 const handleStart = async () => {
     if (!userId.value.trim()) {
         error.value = 'PLEASE ENTER PLAYER ID'
         return
     }
+    
+    // Save Player ID
+    localStorage.setItem('pixel_quiz_player_id', userId.value);
     
     // Store handles fetching.
     const success = await store.startGame(userId.value, subject.value, questionCount.value)
@@ -57,14 +93,14 @@ const handleStart = async () => {
                 <select v-model="questionCount" class="pixel-input">
                     <option :value="10">10</option>
                     <option :value="20">20</option>
-                    <option :value="20">50</option>
+                    <option :value="50">50</option>
                 </select>
             </div>
         </div>
         
         <p v-if="error" class="error-msg">{{ error }}</p>
         
-        <div style="text-align: center; margin-top: 20px;">
+        <div style="text-align: center; margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
             <button 
                 class="pixel-btn primary" 
                 @click="handleStart" 
@@ -72,11 +108,37 @@ const handleStart = async () => {
             >
                 {{ store.isLoading ? 'Starting Engine...' : '開始作答' }}
             </button>
+            
+             <button 
+                class="pixel-btn secondary" 
+                @click="toggleGallery"
+                style="font-size: 0.8rem;"
+            >
+                🎴 全部小卡
+            </button>
         </div>
     </div>
     
     <div class="footer-credits">
         © 2025 PIXEL CUP
+    </div>
+    
+    <!-- Gallery Modal -->
+    <div v-if="showGallery" class="gallery-overlay">
+        <div class="gallery-container">
+            <h2 class="gallery-title">收集小卡</h2>
+            <div class="gallery-grid">
+                <div v-for="card in allCards" :key="card.id" class="card-item" :class="{ 'unowned': !card.owned }">
+                     <span class="card-id">#{{ card.id }}</span>
+                     <div class="card-img-wrapper">
+                        <img :src="card.url" loading="lazy" />
+                     </div>
+                </div>
+            </div>
+            <button class="pixel-btn primary close-btn" @click="toggleGallery">
+                關閉
+            </button>
+        </div>
     </div>
 </div>
 </template>
@@ -161,5 +223,118 @@ const handleStart = async () => {
 
 .pixel-input option {
     color: #000;
+}
+
+/* Gallery Styles */
+.gallery-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    overflow: hidden;
+}
+
+.gallery-container {
+    background: #fff;
+    width: 100%;
+    max-width: 1400px; /* Large width for 10 cols */
+    height: 100%;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    border: 4px solid var(--mk-yellow);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+.gallery-title {
+    text-align: center;
+    color: var(--mk-black);
+    font-style: italic;
+    margin-top: 0;
+    margin-bottom: 20px;
+    border-bottom: 4px solid var(--mk-black);
+    padding-bottom: 10px;
+}
+
+.gallery-grid {
+    flex: 1;
+    overflow-y: auto;
+    display: grid;
+    /* Desktop: 10 columns */
+    grid-template-columns: repeat(10, 1fr); 
+    gap: 10px;
+    padding: 10px;
+    background: #eee;
+    border: 2px inset #ccc;
+}
+
+/* Responsive Grid */
+@media (max-width: 1200px) {
+    .gallery-grid { grid-template-columns: repeat(6, 1fr); }
+}
+@media (max-width: 768px) {
+    .gallery-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 480px) {
+    .gallery-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.card-item {
+    background: #fff;
+    border: 2px solid #000;
+    padding: 5px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.card-id {
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-bottom: 2px;
+    color: #555;
+    background: #ddd;
+    width: 100%;
+    display: block;
+}
+
+.card-img-wrapper {
+    width: 100%;
+    aspect-ratio: 1/1; /* Square cards */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #ccc;
+}
+
+.card-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.2s;
+}
+
+.card-item.unowned img {
+    filter: grayscale(100%);
+    opacity: 0.3;
+}
+
+.card-item:hover img {
+    transform: scale(1.1);
+}
+
+.close-btn {
+    margin-top: 20px;
+    align-self: center;
+    width: 200px;
 }
 </style>
